@@ -1,0 +1,94 @@
+from OpenGL.GL import *
+from OpenGL.GLUT import *
+from OpenGL.GLU import *
+
+# Maze grid
+grid_length = 60
+grid_size = 14
+outer_wall_height = 60
+inner_wall_height = 40
+
+maze_layout = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,1,0,0,0,0,0,1],
+    [1,0,1,1,1,0,0,1,0,1,1,1,0,1],
+    [1,0,0,0,1,0,0,0,0,1,0,0,0,1],
+    [1,1,1,0,1,1,1,1,1,1,0,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,1,1,0,1,1,0,1],
+    [1,0,0,0,1,0,0,0,0,0,1,0,0,1],
+    [1,1,1,0,1,1,1,1,1,1,0,1,1,1],
+    [1,0,0,0,0,0,0,1,0,0,0,0,0,1],
+    [1,0,1,1,1,0,0,1,0,1,1,1,0,1],
+    [1,0,0,0,1,0,0,0,0,1,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+]
+
+def init():
+    """Setup projection and OpenGL settings"""
+    glClearColor(0.0, 0.0, 0.0, 1.0)   # black background
+    glEnable(GL_DEPTH_TEST)            # enable depth testing
+
+    glMatrixMode(GL_PROJECTION)
+    glLoadIdentity()
+    gluPerspective(60, 1.33, 1, 2000)  # FOV, aspect, near, far
+
+def draw_floor():
+    """Base floor"""
+    size = grid_size * grid_length
+    glColor3f(0.2, 0.2, 0.2)  # dark gray
+    glBegin(GL_QUADS)
+    glVertex3f(-size/2, -size/2, 0)
+    glVertex3f( size/2, -size/2, 0)
+    glVertex3f( size/2,  size/2, 0)
+    glVertex3f(-size/2,  size/2, 0)
+    glEnd()
+
+def draw_wall(x, y, height):
+    glPushMatrix()
+    glTranslatef(x, y, height/2)
+    glScalef(grid_length, grid_length, height)
+    glColor3f(0, 0.8, 0)   # green
+    glutSolidCube(1)       # unit cube scaled
+    glPopMatrix()
+
+def draw_maze():
+    rows = len(maze_layout)
+    cols = len(maze_layout[0])
+    for i in range(rows):
+        for j in range(cols):
+            if maze_layout[i][j] == 1:
+                x = (j - cols//2) * grid_length
+                y = (rows//2 - i) * grid_length
+                if i==0 or i==rows-1 or j==0 or j==cols-1:
+                    draw_wall(x, y, outer_wall_height)
+                else:
+                    draw_wall(x, y, inner_wall_height)
+
+def display():
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+    glMatrixMode(GL_MODELVIEW)
+    glLoadIdentity()
+    gluLookAt(400, 400, 500,   0, 0, 0,   0, 0, 1)
+
+    draw_floor()
+    draw_maze()
+
+    glutSwapBuffers()
+
+def idle():
+    glutPostRedisplay()
+
+def main():
+    glutInit()
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
+    glutInitWindowSize(1000, 700)
+    glutCreateWindow(b"3D Pac-Man Maze - Phase 1")
+    init()
+    glutDisplayFunc(display)
+    glutIdleFunc(idle)  # keep refreshing
+    glutMainLoop()
+
+if __name__ == "__main__":
+    main()
