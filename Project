@@ -33,8 +33,46 @@ pacman_radius = grid_length // 2 - 6
 speed = 10
 
 # Camera state
-cam_angle = [45, 45]      # yaw, pitch
+cam_angle = [45, 45]      # yaw, pitch for third-person
 cam_dist = 500
+camera_mode = "third"     # "third" or "first"
+
+# ---------------------------
+# Dots (Pellets)
+# ---------------------------
+dots = []
+dot_radius = 6
+score = 0
+
+def init_dots():
+    global dots
+    dots = []
+    rows = len(maze_layout)
+    cols = len(maze_layout[0])
+    for i in range(rows):
+        for j in range(cols):
+            if maze_layout[i][j] == 0:
+                x = (j - cols//2) * grid_length
+                y = (rows//2 - i) * grid_length
+                dots.append([x, y, True])  # [x, y, visible]
+
+def draw_dots():
+    glColor3f(1, 1, 1)  # white dots
+    for dot in dots:
+        if dot[2]:  # visible
+            glPushMatrix()
+            glTranslatef(dot[0], dot[1], dot_radius)
+            glutSolidSphere(dot_radius, 10, 10)
+            glPopMatrix()
+
+def check_dot_collision():
+    global score
+    for dot in dots:
+        if dot[2]:
+            dist = math.hypot(pacman_pos[0]-dot[0], pacman_pos[1]-dot[1])
+            if dist < pacman_radius:
+                dot[2] = False
+                score += 10
 
 # ---------------------------
 # Maze Rendering
@@ -54,7 +92,7 @@ def draw_wall(x, y, height):
     glTranslatef(x, y, height/2)
     glScalef(grid_length, grid_length, height)
     glColor3f(0, 0.8, 0)   # green
-    glutSolidCube(1)       # unit cube scaled
+    glutSolidCube(1)
     glPopMatrix()
 
 def draw_maze():
@@ -71,32 +109,35 @@ def draw_maze():
                     draw_wall(x, y, inner_wall_height)
 
 # ---------------------------
-# Pac-Man Rendering
+# Pac-Man Rendering with clear eyes
 # ---------------------------
 def draw_pacman():
+    if camera_mode == "first":
+        return  # hide Pac-Man in first-person
     glPushMatrix()
     glTranslatef(pacman_pos[0], pacman_pos[1], pacman_radius)
     glRotatef(pacman_angle, 0, 0, 1)
 
-    # Body (yellow sphere)
+    # Body
     glColor3f(1, 1, 0)
     glutSolidSphere(pacman_radius, 40, 40)
 
-    # Eyes (two black spheres on the FRONT)
+    # Eyes (forward-facing)
     glColor3f(0, 0, 0)
-    eye_offset = pacman_radius * 0.6
-    side_offset = 10
-    up_offset = pacman_radius * 0.4
+    forward_offset = pacman_radius * 0.7  # forward
+    side_offset = pacman_radius * 0.35    # sideways
+    up_offset = pacman_radius * 0.5       # slightly up
 
     # Left eye
     glPushMatrix()
-    glTranslatef(eye_offset, side_offset, up_offset)
-    glutSolidSphere(5, 10, 10)
+    glTranslatef(forward_offset, side_offset, up_offset)
+    glutSolidSphere(6, 12, 12)
     glPopMatrix()
+
     # Right eye
     glPushMatrix()
-    glTranslatef(eye_offset, -side_offset, up_offset)
-    glutSolidSphere(5, 10, 10)
+    glTranslatef(forward_offset, -side_offset, up_offset)
+    glutSolidSphere(6, 12, 12)
     glPopMatrix()
 
     glPopMatrix()
@@ -105,11 +146,9 @@ def draw_pacman():
 # Movement & Collision
 # ---------------------------
 def can_move(new_x, new_y):
-    """Lenient collision: check Pac-Man’s body radius but allow sliding at corners"""
     rows = len(maze_layout)
     cols = len(maze_layout[0])
-    r = pacman_radius * 0.7  # slightly smaller radius → smoother cornering
-
+    r = pacman_radius * 0.7
     offsets = [(r,0), (-r,0), (0,r), (0,-r)]
     for ox, oy in offsets:
         cx = new_x + ox
@@ -123,21 +162,21 @@ def can_move(new_x, new_y):
 
 def keyboard(key, x, y):
     global pacman_pos, pacman_angle
-    if key == b'w':  # Move Forward
+    if key == b'w':
         dx = math.cos(math.radians(pacman_angle)) * speed
         dy = math.sin(math.radians(pacman_angle)) * speed
         if can_move(pacman_pos[0] + dx, pacman_pos[1] + dy):
             pacman_pos[0] += dx
             pacman_pos[1] += dy
-    elif key == b's':  # Move Backward
+    elif key == b's':
         dx = -math.cos(math.radians(pacman_angle)) * speed
         dy = -math.sin(math.radians(pacman_angle)) * speed
         if can_move(pacman_pos[0] + dx, pacman_pos[1] + dy):
             pacman_pos[0] += dx
             pacman_pos[1] += dy
-    elif key == b'a':  # Turn Left
+    elif key == b'a':
         pacman_angle += 10
-    elif key == b'd':  # Turn Right
+    elif key == b'd':
         pacman_angle -= 10
 
 def special_keys(key, x, y):
@@ -147,20 +186,43 @@ def special_keys(key, x, y):
     if key == GLUT_KEY_UP: cam_angle[1] += 5
     if key == GLUT_KEY_DOWN: cam_angle[1] -= 5
 
+def mouse_click(button, state, x, y):
+    global camera_mode
+    if button == GLUT_RIGHT_BUTTON and state == GLUT_DOWN:
+        camera_mode = "first" if camera_mode == "third" else "third"
+
 # ---------------------------
 # Camera
 # ---------------------------
 def setup_camera():
+    global cam_angle
     glMatrixMode(GL_MODELVIEW)
     glLoadIdentity()
+    if camera_mode == "third":
+        cam_angle[1] = max(min(cam_angle[1], 85), 5)
+        eye_x = pacman_pos[0] + cam_dist * math.cos(math.radians(cam_angle[0]))
+        eye_y = pacman_pos[1] + cam_dist * math.sin(math.radians(cam_angle[0]))
+        eye_z = cam_dist * math.sin(math.radians(cam_angle[1]))
+        gluLookAt(eye_x, eye_y, eye_z, pacman_pos[0], pacman_pos[1], pacman_radius, 0, 0, 1)
+    else:
+        offset = pacman_radius * 1.2
+        cam_x = pacman_pos[0] + math.cos(math.radians(pacman_angle)) * offset
+        cam_y = pacman_pos[1] + math.sin(math.radians(pacman_angle)) * offset
+        cam_z = pacman_radius * 0.5
+        look_x = cam_x + math.cos(math.radians(pacman_angle)) * 100
+        look_y = cam_y + math.sin(math.radians(pacman_angle)) * 100
+        look_z = cam_z
+        gluLookAt(cam_x, cam_y, cam_z, look_x, look_y, look_z, 0, 0, 1)
 
-    eye_x = pacman_pos[0] + cam_dist * math.cos(math.radians(cam_angle[0]))
-    eye_y = pacman_pos[1] + cam_dist * math.sin(math.radians(cam_angle[0]))
-    eye_z = cam_dist * math.sin(math.radians(cam_angle[1]))
-
-    gluLookAt(eye_x, eye_y, eye_z,
-              pacman_pos[0], pacman_pos[1], 0,
-              0, 0, 1)
+# ---------------------------
+# Score Rendering
+# ---------------------------
+def draw_score():
+    glColor3f(1, 1, 1)
+    glWindowPos2f(10, 10)
+    score_text = f"Score: {score}"
+    for ch in score_text:
+        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(ch))
 
 # ---------------------------
 # Display & Init
@@ -170,7 +232,10 @@ def display():
     setup_camera()
     draw_floor()
     draw_maze()
+    draw_dots()
     draw_pacman()
+    check_dot_collision()
+    draw_score()
     glutSwapBuffers()
 
 def idle():
@@ -182,17 +247,19 @@ def init():
     glMatrixMode(GL_PROJECTION)
     glLoadIdentity()
     gluPerspective(60, 1.33, 1, 2000)
+    init_dots()
 
 def main():
     glutInit()
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
     glutInitWindowSize(1000, 700)
-    glutCreateWindow(b"3D Pac-Man Maze - Phase 2")
+    glutCreateWindow(b"3D Pac-Man Maze - Eyes, Dots & Score")
     init()
     glutDisplayFunc(display)
     glutIdleFunc(idle)
     glutKeyboardFunc(keyboard)
     glutSpecialFunc(special_keys)
+    glutMouseFunc(mouse_click)
     glutMainLoop()
 
 if __name__ == "__main__":
