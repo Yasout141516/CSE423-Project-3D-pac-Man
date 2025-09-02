@@ -1,9 +1,11 @@
 from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
-import math
+import math, random
 
-# Maze grid setup
+# ---------------------------
+# Maze Setup
+# ---------------------------
 grid_length = 60
 outer_wall_height = 60
 inner_wall_height = 40
@@ -26,60 +28,77 @@ maze_layout = [
 ]
 grid_size = len(maze_layout)
 
-# Pac-Man state
-pacman_pos = [0, 0]       # world coordinates (x,y)
-pacman_angle = 0          # facing angle (degrees)
+# ---------------------------
+# Pac-Man
+# ---------------------------
+pacman_pos = [0, 0]
+pacman_angle = 0
 pacman_radius = grid_length // 2 - 6
 speed = 10
 
-# Camera state
-cam_angle = [45, 45]      # yaw, pitch for third-person
-cam_dist = 500
-camera_mode = "third"     # "third" or "first"
-
 # ---------------------------
-# Dots (Pellets)
+# Pellets
 # ---------------------------
-dots = []
-dot_radius = 6
-score = 0
-
-def init_dots():
-    global dots
-    dots = []
-    rows = len(maze_layout)
-    cols = len(maze_layout[0])
+pellets = []
+def init_pellets():
+    global pellets
+    pellets.clear()
+    rows, cols = len(maze_layout), len(maze_layout[0])
     for i in range(rows):
         for j in range(cols):
             if maze_layout[i][j] == 0:
                 x = (j - cols//2) * grid_length
                 y = (rows//2 - i) * grid_length
-                dots.append([x, y, True])  # [x, y, visible]
+                pellets.append([x, y, True])  # True = still there
 
-def draw_dots():
-    glColor3f(1, 1, 1)  # white dots
-    for dot in dots:
-        if dot[2]:  # visible
-            glPushMatrix()
-            glTranslatef(dot[0], dot[1], dot_radius)
-            glutSolidSphere(dot_radius, 10, 10)
-            glPopMatrix()
+# ---------------------------
+# Ghosts
+# ---------------------------
+ghosts = []
+num_ghosts = 4
+ghost_colors = [(1,0,0), (0,1,1), (1,0.6,1), (1,0.5,0)]  # red, cyan, pink, orange
 
-def check_dot_collision():
-    global score
-    for dot in dots:
-        if dot[2]:
-            dist = math.hypot(pacman_pos[0]-dot[0], pacman_pos[1]-dot[1])
-            if dist < pacman_radius:
-                dot[2] = False
-                score += 10
+# ---------------------------
+# Camera
+# ---------------------------
+cam_angle = [45, 45]
+cam_dist = 500
+camera_mode = "third"
+
+# ---------------------------
+# Game State
+# ---------------------------
+score = 0
+lives = 3
+
+# ---------------------------
+# Helpers
+# ---------------------------
+def draw_text(x, y, text, font=GLUT_BITMAP_HELVETICA_18):
+    glMatrixMode(GL_PROJECTION)
+    glPushMatrix()
+    glLoadIdentity()
+    gluOrtho2D(0, 1000, 0, 700)
+    glMatrixMode(GL_MODELVIEW)
+    glPushMatrix()
+    glLoadIdentity()
+
+    glColor3f(1, 1, 1)
+    glRasterPos2f(x, y)
+    for ch in text:
+        glutBitmapCharacter(font, ord(ch))
+
+    glPopMatrix()
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
 
 # ---------------------------
 # Maze Rendering
 # ---------------------------
 def draw_floor():
     size = grid_size * grid_length
-    glColor3f(0.2, 0.2, 0.2)  # dark gray
+    glColor3f(0.1, 0.1, 0.8)  # neon blue floor
     glBegin(GL_QUADS)
     glVertex3f(-size/2, -size/2, 0)
     glVertex3f( size/2, -size/2, 0)
@@ -91,7 +110,7 @@ def draw_wall(x, y, height):
     glPushMatrix()
     glTranslatef(x, y, height/2)
     glScalef(grid_length, grid_length, height)
-    glColor3f(0, 0.8, 0)   # green
+    glColor3f(0.6, 0, 0.8)  # purple walls
     glutSolidCube(1)
     glPopMatrix()
 
@@ -109,38 +128,98 @@ def draw_maze():
                     draw_wall(x, y, inner_wall_height)
 
 # ---------------------------
-# Pac-Man Rendering with clear eyes
+# Pac-Man Rendering
 # ---------------------------
 def draw_pacman():
-    if camera_mode == "first":
-        return  # hide Pac-Man in first-person
     glPushMatrix()
     glTranslatef(pacman_pos[0], pacman_pos[1], pacman_radius)
     glRotatef(pacman_angle, 0, 0, 1)
 
-    # Body
-    glColor3f(1, 1, 0)
+    glColor3f(1, 1, 0)  # yellow body
     glutSolidSphere(pacman_radius, 40, 40)
 
-    # Eyes (forward-facing)
-    glColor3f(0, 0, 0)
-    forward_offset = pacman_radius * 0.7  # forward
-    side_offset = pacman_radius * 0.35    # sideways
-    up_offset = pacman_radius * 0.5       # slightly up
-
-    # Left eye
+    glColor3f(0, 0, 0)  # eyes
+    eye_offset = pacman_radius * 0.6
+    side_offset = 10
+    up_offset = pacman_radius * 0.4
     glPushMatrix()
-    glTranslatef(forward_offset, side_offset, up_offset)
-    glutSolidSphere(6, 12, 12)
+    glTranslatef(eye_offset, side_offset, up_offset)
+    glutSolidSphere(5, 10, 10)
     glPopMatrix()
-
-    # Right eye
     glPushMatrix()
-    glTranslatef(forward_offset, -side_offset, up_offset)
-    glutSolidSphere(6, 12, 12)
+    glTranslatef(eye_offset, -side_offset, up_offset)
+    glutSolidSphere(5, 10, 10)
+    glPopMatrix()
     glPopMatrix()
 
+# ---------------------------
+# Pellets Rendering
+# ---------------------------
+def draw_pellets():
+    glColor3f(1,1,1)
+    for x, y, active in pellets:
+        if active:
+            glPushMatrix()
+            glTranslatef(x, y, 5)
+            glutSolidSphere(5, 10, 10)
+            glPopMatrix()
+
+# ---------------------------
+# Ghost Rendering
+# ---------------------------
+def draw_ghost(x, y, color):
+    glPushMatrix()
+    glTranslatef(x, y, grid_length/2)
+    glColor3f(*color)
+    glutSolidSphere(grid_length/2, 20, 20)
+
+    # eyes
+    glColor3f(1,1,1)
+    glPushMatrix()
+    glTranslatef(10, 10, 20)
+    glutSolidSphere(5, 10, 10)
     glPopMatrix()
+    glPushMatrix()
+    glTranslatef(10, -10, 20)
+    glutSolidSphere(5, 10, 10)
+    glPopMatrix()
+
+    glColor3f(0,0,0)
+    glPushMatrix()
+    glTranslatef(12, 10, 20)
+    glutSolidSphere(2, 10, 10)
+    glPopMatrix()
+    glPushMatrix()
+    glTranslatef(12, -10, 20)
+    glutSolidSphere(2, 10, 10)
+    glPopMatrix()
+    glPopMatrix()
+
+# ---------------------------
+# Ghost Logic (stationary)
+# ---------------------------
+def generate_ghost():
+    rows, cols = len(maze_layout), len(maze_layout[0])
+    while True:
+        i = random.randint(1, rows-2)
+        j = random.randint(1, cols-2)
+        if maze_layout[i][j] == 0:
+            x = (j - cols//2) * grid_length
+            y = (rows//2 - i) * grid_length
+            return [x, y]
+
+def update_ghosts():
+    global ghosts, lives, pacman_pos
+    for g in ghosts:
+        dx = pacman_pos[0] - g[0]
+        dy = pacman_pos[1] - g[1]
+        dist = math.sqrt(dx**2 + dy**2)
+        if dist < pacman_radius:
+            print("💀 Pac-Man caught!")
+            lives -= 1
+            pacman_pos[:] = [0, 0]
+            if lives <= 0:
+                print("GAME OVER")
 
 # ---------------------------
 # Movement & Collision
@@ -159,6 +238,16 @@ def can_move(new_x, new_y):
             if maze_layout[ci][cj] == 1:
                 return False
     return True
+
+def check_pellets():
+    global score
+    for p in pellets:
+        if p[2]:
+            dx = pacman_pos[0] - p[0]
+            dy = pacman_pos[1] - p[1]
+            if math.sqrt(dx**2 + dy**2) < pacman_radius:
+                p[2] = False
+                score += 10
 
 def keyboard(key, x, y):
     global pacman_pos, pacman_angle
@@ -195,50 +284,47 @@ def mouse_click(button, state, x, y):
 # Camera
 # ---------------------------
 def setup_camera():
-    global cam_angle
     glMatrixMode(GL_MODELVIEW)
     glLoadIdentity()
     if camera_mode == "third":
-        cam_angle[1] = max(min(cam_angle[1], 85), 5)
         eye_x = pacman_pos[0] + cam_dist * math.cos(math.radians(cam_angle[0]))
         eye_y = pacman_pos[1] + cam_dist * math.sin(math.radians(cam_angle[0]))
         eye_z = cam_dist * math.sin(math.radians(cam_angle[1]))
-        gluLookAt(eye_x, eye_y, eye_z, pacman_pos[0], pacman_pos[1], pacman_radius, 0, 0, 1)
+        gluLookAt(eye_x, eye_y, eye_z,
+                  pacman_pos[0], pacman_pos[1], pacman_radius,
+                  0, 0, 1)
     else:
-        offset = pacman_radius * 1.2
-        cam_x = pacman_pos[0] + math.cos(math.radians(pacman_angle)) * offset
-        cam_y = pacman_pos[1] + math.sin(math.radians(pacman_angle)) * offset
-        cam_z = pacman_radius * 0.5
+        face_offset = pacman_radius * 1.2
+        eye_height  = pacman_radius * 0.6
+        cam_x = pacman_pos[0] + math.cos(math.radians(pacman_angle)) * face_offset
+        cam_y = pacman_pos[1] + math.sin(math.radians(pacman_angle)) * face_offset
+        cam_z = eye_height
         look_x = cam_x + math.cos(math.radians(pacman_angle)) * 100
         look_y = cam_y + math.sin(math.radians(pacman_angle)) * 100
         look_z = cam_z
-        gluLookAt(cam_x, cam_y, cam_z, look_x, look_y, look_z, 0, 0, 1)
+        gluLookAt(cam_x, cam_y, cam_z,
+                  look_x, look_y, look_z,
+                  0, 0, 1)
 
 # ---------------------------
-# Score Rendering
-# ---------------------------
-def draw_score():
-    glColor3f(1, 1, 1)
-    glWindowPos2f(10, 10)
-    score_text = f"Score: {score}"
-    for ch in score_text:
-        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(ch))
-
-# ---------------------------
-# Display & Init
+# Display & Loop
 # ---------------------------
 def display():
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     setup_camera()
     draw_floor()
     draw_maze()
-    draw_dots()
     draw_pacman()
-    check_dot_collision()
-    draw_score()
+    draw_pellets()
+    for i, g in enumerate(ghosts):
+        draw_ghost(g[0], g[1], ghost_colors[i % len(ghost_colors)])
+    draw_text(10, 670, f"Score: {score}")
+    draw_text(10, 640, f"Lives: {lives}")
     glutSwapBuffers()
 
 def idle():
+    update_ghosts()
+    check_pellets()
     glutPostRedisplay()
 
 def init():
@@ -247,14 +333,17 @@ def init():
     glMatrixMode(GL_PROJECTION)
     glLoadIdentity()
     gluPerspective(60, 1.33, 1, 2000)
-    init_dots()
+    glMatrixMode(GL_MODELVIEW)
 
 def main():
+    global ghosts
     glutInit()
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
     glutInitWindowSize(1000, 700)
-    glutCreateWindow(b"3D Pac-Man Maze - Eyes, Dots & Score")
+    glutCreateWindow(b"3D Pac-Man - Retro Colors & Stationary Ghosts")
     init()
+    init_pellets()
+    ghosts = [generate_ghost() for _ in range(num_ghosts)]
     glutDisplayFunc(display)
     glutIdleFunc(idle)
     glutKeyboardFunc(keyboard)
