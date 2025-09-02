@@ -180,10 +180,27 @@ class PacMan:
         glTranslatef(self.x, self.y, self.z)
         glRotatef(90, 1, 0, 0)  # orient sphere upwards
         glutSolidSphere(PAC_RADIUS, 20, 16)
+        
+        # Add eyes to show direction
+        glColor3f(0, 0, 0)  # Black eyes
+        eye_offset = PAC_RADIUS * 0.6
+        
+        # Left eye
+        glPushMatrix()
+        glTranslatef(eye_offset, PAC_RADIUS * 0.3, PAC_RADIUS * 0.4)
+        glutSolidSphere(2, 8, 6)
+        glPopMatrix()
+        
+        # Right eye
+        glPushMatrix()
+        glTranslatef(eye_offset, -PAC_RADIUS * 0.3, PAC_RADIUS * 0.4)
+        glutSolidSphere(2, 8, 6)
+        glPopMatrix()
+        
         glPopMatrix()
 
     def fire(self, target=None):
-        """Fire a bullet in current direction or toward target"""
+
         rad = math.radians(self.yaw)
         dx, dy = math.cos(rad), math.sin(rad)
         
@@ -382,11 +399,9 @@ class Game:
 
 game = Game()
 
-# =====================
-# Drawing functions (following template structure)
-# =====================
+
 def draw_text(x, y, text, font=GLUT_BITMAP_HELVETICA_18):
-    """Template function preserved"""
+
     glColor3f(1.0, 1.0, 1.0)
     glMatrixMode(GL_PROJECTION)
     glPushMatrix()
@@ -423,7 +438,7 @@ def draw_maze():
         glutSolidCube(1.0)
         glPopMatrix()
 
-    # Destroyed paths as dark gray plates
+
     glColor3f(*DARK_GRAY)
     for r in range(H):
         for c in range(W):
@@ -459,7 +474,7 @@ def draw_shapes():
 
     draw_maze()
     
-    # Draw all game objects
+
     for o in game.obstacles: 
         o.draw()
     for p in game.powerups: 
@@ -469,13 +484,12 @@ def draw_shapes():
     for b in game.bullets: 
         b.draw()
     
-    # Draw Pac-Man
+
     game.pac.draw()
 
 def draw_floor_plane():
 
     size = max(W, H) * TILE
-    glDisable(GL_LIGHTING)
     glColor3f(0.05, 0.05, 0.05)
     glBegin(GL_QUADS)
     glVertex3f(-size/2, -size/2, 0)
@@ -483,7 +497,6 @@ def draw_floor_plane():
     glVertex3f( size/2,  size/2, 0)
     glVertex3f(-size/2,  size/2, 0)
     glEnd()
-    glEnable(GL_LIGHTING)
 
 # =====================
 # Input handlers 
@@ -547,7 +560,7 @@ def keyboardListener(key, x, y):
     elif key in (b'o', b'O'):
         spawn_obstacle()
     elif key in (b'c',):
-        # keep auto-shoot behavior for 'C' upper; lowercase 'c' reserved above
+
         pass
     elif key in (b'x', b'X'):
         # clear destroyed paths
@@ -749,11 +762,6 @@ def run_game():
     # OpenGL setup
     glClearColor(0.02, 0.02, 0.05, 1.0)
     glEnable(GL_DEPTH_TEST)
-    glEnable(GL_COLOR_MATERIAL)
-    glEnable(GL_LIGHTING)
-    glEnable(GL_LIGHT0)
-    glLightfv(GL_LIGHT0, GL_POSITION, (GLfloat * 4)(0.0, 0.0, 300.0, 1.0))
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, (GLfloat * 4)(0.9, 0.9, 0.9, 1.0))
 
     # Register callbacks
     glutDisplayFunc(showScreen)
